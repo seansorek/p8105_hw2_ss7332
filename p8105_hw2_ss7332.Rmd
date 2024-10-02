@@ -6,25 +6,39 @@ output: github_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,
+                      comment = NA)
+library(tidyverse)
+library(readxl)
 ```
 
-## R Markdown
+# Problem 1
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r}
+transit <- read_csv("data/NYC_Transit_Subway_Entrance_And_Exit_Data.csv") |> 
+  select(Line, starts_with("Station"), starts_with("Route"),
+         Vending, `Entrance Type`, ADA, Entry) |>
+  mutate(Entry = Entry |> case_match("YES" ~ T, "NO" ~ F))
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+glimpse(transit)
 ```
 
-## Including Plots
+# Problem 2
 
-You can also embed plots, for example:
+```{r}
+mr_trash_wheel <- read_excel(
+  "data/202409 Trash Wheel Collection Data.xlsx",
+  sheet = "Mr. Trash Wheel", skip = 1, col_names = TRUE
+) |> select(-starts_with("...")) |> filter(!is.na(Dumpster)) |> mutate(`Sports Balls` = as.integer(floor(`Sports Balls`)), Wheel = "Mr. Trash Wheel")
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+pf_trash_wheel <- read_excel(
+  "data/202409 Trash Wheel Collection Data.xlsx",
+  sheet = "Professor Trash Wheel", skip = 1, col_names = TRUE
+) |> select(-starts_with("...")) |> filter(!is.na(Dumpster)) |> mutate(Wheel = "Professor Trash Wheel")
+
+gw_trash_wheel <- read_excel(
+  "data/202409 Trash Wheel Collection Data.xlsx",
+  sheet = "Gwynnda Trash Wheel", skip = 1, col_names = TRUE
+) |> select(-starts_with("...")) |> filter(!is.na(Dumpster)) |> mutate(Wheel = "Gwynnda Trash Wheel")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
