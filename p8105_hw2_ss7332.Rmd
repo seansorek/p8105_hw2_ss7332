@@ -12,33 +12,100 @@ library(tidyverse)
 library(readxl)
 ```
 
-# Problem 1
-
-```{r}
-transit <- read_csv("data/NYC_Transit_Subway_Entrance_And_Exit_Data.csv") |> 
-  select(Line, starts_with("Station"), starts_with("Route"),
-         Vending, `Entrance Type`, ADA, Entry) |>
-  mutate(Entry = Entry |> case_match("YES" ~ T, "NO" ~ F))
-
-glimpse(transit)
-```
-
 # Problem 2
 
-```{r}
+```{r, message=F}
 mr_trash_wheel <- read_excel(
   "data/202409 Trash Wheel Collection Data.xlsx",
   sheet = "Mr. Trash Wheel", skip = 1, col_names = TRUE
-) |> select(-starts_with("...")) |> filter(!is.na(Dumpster)) |> mutate(`Sports Balls` = as.integer(floor(`Sports Balls`)), Wheel = "Mr. Trash Wheel")
+) |> select(-starts_with("...")) |> filter(!is.na(Dumpster)) |> mutate(`Sports Balls` = as.integer(floor(`Sports Balls`)), Year = as.integer(Year), Wheel = "Mr. Trash Wheel")
 
 pf_trash_wheel <- read_excel(
   "data/202409 Trash Wheel Collection Data.xlsx",
   sheet = "Professor Trash Wheel", skip = 1, col_names = TRUE
-) |> select(-starts_with("...")) |> filter(!is.na(Dumpster)) |> mutate(Wheel = "Professor Trash Wheel")
+) |> select(-starts_with("...")) |> filter(!is.na(Dumpster) & !is.na(Year)) |> mutate(Wheel = "Professor Trash Wheel")
 
 gw_trash_wheel <- read_excel(
   "data/202409 Trash Wheel Collection Data.xlsx",
   sheet = "Gwynnda Trash Wheel", skip = 1, col_names = TRUE
 ) |> select(-starts_with("...")) |> filter(!is.na(Dumpster)) |> mutate(Wheel = "Gwynnda Trash Wheel")
+
+trash_wheels <- bind_rows(
+  mr_trash_wheel,
+  pf_trash_wheel,
+  gw_trash_wheel
+)
+
+professor_total_weight <- trash_wheels |>
+  filter(Wheel == "Professor Trash Wheel") |>
+  summarise(total_trash_weight = sum(`Weight (tons)`))
+
+gwynnda_total_cigarettes <- trash_wheels |>
+  filter(Wheel == "Gwynnda Trash Wheel", Year == 2022, Month == "June") |>
+  summarise(total_trash_cigs = sum(`Cigarette Butts`))
 ```
 
+The `trash_wheels` dataset contains trash pickup data for multiple water-wheel vessels that remove trash from the Inner Harbor in Baltimore. It tracks 3 trash-wheels named: Mr. Trash Wheel, Professor Trash Wheel, and Gwynnda Trash Wheel. It contains `r nrow(trash_wheels)` rows and `r ncol(trash_wheels)` columns. The columns contain information about dumpsters filled by each trash wheel and counts of different types of trash found in each dumpster, along with date collected and weight. With this dataset, we can find out that Professor Trash Wheel has removed a total of `r as.numeric(professor_total_weight)` tons of trash from the river. We can also find out that Gwynnda Trash Wheel has removed `r as.integer(gwynnda_total_cigarettes)` cigarette butts from the river during June of 2022.
+
+# Problem 3
+
+```{r, message = F}
+bakers <- read_csv("data/bakers.csv") |>
+  mutate(Baker = str_extract(`Baker Name`, "[A-Za-z]+")) |>
+  rename(
+    Full_Name = `Baker Name`,
+    Age = `Baker Age`,
+    Occupation = `Baker Occupation`)
+bakes <- read_csv("data/bakes.csv") |>
+  mutate(Baker = ifelse(Baker == "\"Jo\"", "Jo", Baker))
+results <- read_csv("data/results.csv", skip = 2) |>
+  rename(Series = series, Episode = episode, Baker = baker,
+         Technical = technical, Result = result) |>
+  mutate(Baker = ifelse(Baker == "Joanne", "Jo", Baker))
+viewers <- read_csv("data/viewers.csv")
+
+#Key by Series, Episode, Baker
+
+# Bakes and Results first
+bakes_results <- full_join(x = bakes, y = results, by = join_by(Series, Episode, Baker))
+combined <- full_join(x = bakes_results, y = bakers, join_by(Series, Baker)) |>
+  relocate(Series, Episode, Baker, Full_Name, Age, Occupation, Hometown) |> # metadata before results
+  arrange(Series, Episode, Baker)
+
+# Sanity Checks
+
+annetha_1 <- combined |> filter(Series == 1, Baker == "Annetha")
+Jo_2 <- combined |> filter(Series == 2, Baker == "Jo")
+eliminated <- combined |> filter(is.na(Result))
+
+# Nothing looks out of the ordinary upon inspection
+save(combined, file = "combined.csv")
+```
+
+I cleaned the data iteratively. First, I decided to join using the combination of Series, Episode, and baker after checking that no first name repeats in an individual season. To achieve this, I had to homogenize the joining variable names using the `rename()` function. I took the opportunity to clean the other variable names to have the same style and remove spaces. Next, I had to fix the Baker variable for Jo Wheatley of Series 2, since she had different names in each individual dataset. During the process, I used several filters (sanity checks) to individually inspect to detect issues.
+
+```{r}
+winners <- combined |>
+  filter(Result %in% c("WINNER", "STAR BAKER"), Series > 4) |>
+  select(Series, Episode, Baker) |>
+  pivot_wider(names_from = Series, values_from = Baker, names_prefix = "Season ")
+knitr::kable(winners)
+```
+
+There appears to be multiple upsets, especially in season 10. David did not win any individual episode, but won the entire series. In contrast, seasons 5,6, and 7 appear more predictable with the season winner having multiple episode wins.
+
+```{r, message = F}
+viewers <- read_csv("data/viewers.csv") |>
+  janitor::clean_names() |>
+  pivot_longer(cols = starts_with("series"),
+               names_to = "series",
+               names_prefix = "series_",
+               values_to = "viewers") |>
+  arrange(series, episode) |> relocate(series, episode, viewers)
+head(viewers, n = 10) |> knitr::kable()
+
+avg_season_1 <- viewers |> filter(series == 1) |> summarize(avg_viewers = mean(viewers, na.rm = T)) |> as.double()
+avg_season_5 <- viewers |> filter(series == 5) |> summarize(avg_viewers = mean(viewers, na.rm = T)) |> as.double()
+```
+
+The average number of viewers in season 1 was `r avg_season_1` units.  The average number of viewers in season 5 was `r avg_season_5` units.  
